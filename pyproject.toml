@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "philiprehberger-debounce"
-version = "0.1.0"
+version = "0.1.1"
 description = "Debounce and throttle decorators for Python functions."
 readme = "README.md"
 license = "MIT"
@@ -24,9 +24,16 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/philiprehberger/py-debounce"
+Homepage = "https://github.com/philiprehberger/py-debounce#readme"
 Repository = "https://github.com/philiprehberger/py-debounce"
 Issues = "https://github.com/philiprehberger/py-debounce/issues"
+Changelog = "https://github.com/philiprehberger/py-debounce/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/philiprehberger_debounce"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
