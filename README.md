@@ -3,6 +3,7 @@
 [![Tests](https://github.com/philiprehberger/py-debounce/actions/workflows/publish.yml/badge.svg)](https://github.com/philiprehberger/py-debounce/actions/workflows/publish.yml)
 [![PyPI version](https://img.shields.io/pypi/v/philiprehberger-debounce.svg)](https://pypi.org/project/philiprehberger-debounce/)
 [![License](https://img.shields.io/github/license/philiprehberger/py-debounce)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ec6cb9)](https://github.com/sponsors/philiprehberger)
 
 Debounce and throttle decorators for Python functions.
 
