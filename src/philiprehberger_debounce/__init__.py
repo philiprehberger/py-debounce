@@ -13,15 +13,21 @@ __all__ = ["debounce", "throttle"]
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def debounce(seconds: float) -> Callable[[F], F]:
+def debounce(seconds: float, *, leading: bool = False) -> Callable[[F], F]:
     """Delay function execution until *seconds* have passed since the last call.
 
     Each new call cancels the previous pending invocation and restarts the
     timer.  The decorated function is executed in a background thread once the
     delay elapses without interruption.
 
+    When *leading* is ``True`` the function fires immediately on the first call,
+    then suppresses subsequent calls until *seconds* have elapsed without a new
+    invocation.
+
     Args:
         seconds: Minimum quiet period before the function is invoked.
+        leading: If ``True``, invoke on the leading edge instead of the
+            trailing edge.
 
     Returns:
         A decorator that wraps the target function with debounce logic.
@@ -30,16 +36,32 @@ def debounce(seconds: float) -> Callable[[F], F]:
     def decorator(fn: F) -> F:
         timer: threading.Timer | None = None
         lock = threading.Lock()
+        may_call = True
+
+        def _reset_may_call() -> None:
+            nonlocal may_call
+            with lock:
+                may_call = True
 
         @wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> None:
-            nonlocal timer
+            nonlocal timer, may_call
             with lock:
                 if timer is not None:
                     timer.cancel()
-                timer = threading.Timer(seconds, fn, args=args, kwargs=kwargs)
-                timer.daemon = True
-                timer.start()
+
+                if leading:
+                    should_call = may_call
+                    may_call = False
+                    timer = threading.Timer(seconds, _reset_may_call)
+                    timer.daemon = True
+                    timer.start()
+                    if should_call:
+                        fn(*args, **kwargs)
+                else:
+                    timer = threading.Timer(seconds, fn, args=args, kwargs=kwargs)
+                    timer.daemon = True
+                    timer.start()
 
         return wrapper  # type: ignore[return-value]
 
