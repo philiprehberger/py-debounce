@@ -1,8 +1,12 @@
 # philiprehberger-debounce
 
+[![Tests](https://github.com/philiprehberger/py-debounce/actions/workflows/publish.yml/badge.svg)](https://github.com/philiprehberger/py-debounce/actions/workflows/publish.yml)
+[![PyPI version](https://img.shields.io/pypi/v/philiprehberger-debounce.svg)](https://pypi.org/project/philiprehberger-debounce/)
+[![License](https://img.shields.io/github/license/philiprehberger/py-debounce)](LICENSE)
+
 Debounce and throttle decorators for Python functions.
 
-## Install
+## Installation
 
 ```bash
 pip install philiprehberger-debounce
@@ -47,6 +51,13 @@ for i in range(10):
 |-----------|-------------|
 | `debounce(seconds)` | Delays execution until `seconds` have elapsed since the last call. Cancels any pending invocation on each new call. |
 | `throttle(calls, per)` | Limits the function to `calls` invocations per `per` seconds. Uses a sliding window. |
+
+## Development
+
+```bash
+pip install -e .
+python -m pytest tests/ -v
+```
 
 ## License
 
