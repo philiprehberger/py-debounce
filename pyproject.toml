@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "philiprehberger-debounce"
-version = "0.1.1"
+version = "0.1.2"
 description = "Debounce and throttle decorators for Python functions."
 readme = "README.md"
 license = "MIT"
