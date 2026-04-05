@@ -76,3 +76,29 @@ def test_throttle_allows_after_window() -> None:
 
     append(3)
     assert results == [1, 3]
+
+
+def test_debounce_leading_fires_immediately() -> None:
+    """Leading mode should fire on first call."""
+    results: list[int] = []
+
+    @debounce(0.1, leading=True)
+    def append(value: int) -> None:
+        results.append(value)
+
+    append(1)
+    assert results == [1]
+
+
+def test_debounce_leading_ignores_subsequent() -> None:
+    """Leading mode should ignore rapid subsequent calls."""
+    results: list[int] = []
+
+    @debounce(0.1, leading=True)
+    def append(value: int) -> None:
+        results.append(value)
+
+    append(1)
+    append(2)
+    append(3)
+    assert results == [1]
