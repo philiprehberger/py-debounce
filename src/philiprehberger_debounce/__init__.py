@@ -13,7 +13,12 @@ __all__ = ["debounce", "throttle"]
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def debounce(seconds: float, *, leading: bool = False) -> Callable[[F], F]:
+def debounce(
+    seconds: float,
+    *,
+    leading: bool = False,
+    max_wait: float | None = None,
+) -> Callable[[F], F]:
     """Delay function execution until *seconds* have passed since the last call.
 
     Each new call cancels the previous pending invocation and restarts the
@@ -24,28 +29,52 @@ def debounce(seconds: float, *, leading: bool = False) -> Callable[[F], F]:
     then suppresses subsequent calls until *seconds* have elapsed without a new
     invocation.
 
+    When *max_wait* is provided, it guarantees the wrapped function fires at
+    most ``max_wait`` seconds after the *first* pending call, even when calls
+    keep arriving and continuously reset the debounce timer.  Mirrors lodash
+    ``debounce({ maxWait })`` semantics.
+
     Args:
         seconds: Minimum quiet period before the function is invoked.
         leading: If ``True``, invoke on the leading edge instead of the
             trailing edge.
+        max_wait: Optional upper bound (in seconds) on how long the function
+            may be deferred from the first pending call.  Must be positive and
+            ``>= seconds``.
 
     Returns:
         A decorator that wraps the target function with debounce logic.
+
+    Raises:
+        ValueError: If ``max_wait`` is not positive or is less than ``seconds``.
     """
+
+    if max_wait is not None:
+        if max_wait <= 0:
+            raise ValueError("max_wait must be positive")
+        if max_wait < seconds:
+            raise ValueError("max_wait must be >= seconds")
 
     def decorator(fn: F) -> F:
         timer: threading.Timer | None = None
         lock = threading.Lock()
         may_call = True
+        first_call_at: float | None = None
 
         def _reset_may_call() -> None:
             nonlocal may_call
             with lock:
                 may_call = True
 
+        def _fire_trailing(*args: Any, **kwargs: Any) -> None:
+            nonlocal first_call_at
+            with lock:
+                first_call_at = None
+            fn(*args, **kwargs)
+
         @wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> None:
-            nonlocal timer, may_call
+            nonlocal timer, may_call, first_call_at
             with lock:
                 if timer is not None:
                     timer.cancel()
@@ -58,10 +87,31 @@ def debounce(seconds: float, *, leading: bool = False) -> Callable[[F], F]:
                     timer.start()
                     if should_call:
                         fn(*args, **kwargs)
-                else:
-                    timer = threading.Timer(seconds, fn, args=args, kwargs=kwargs)
+                    return
+
+                if max_wait is None:
+                    timer = threading.Timer(seconds, _fire_trailing, args=args, kwargs=kwargs)
                     timer.daemon = True
                     timer.start()
+                    return
+
+                # max_wait branch
+                now = time.monotonic()
+                if first_call_at is None:
+                    first_call_at = now
+
+                elapsed = now - first_call_at
+                if elapsed >= max_wait:
+                    # Upper bound already reached — fire immediately.
+                    first_call_at = None
+                    fn(*args, **kwargs)
+                    return
+
+                remaining_max = max_wait - elapsed
+                delay = seconds if seconds < remaining_max else remaining_max
+                timer = threading.Timer(delay, _fire_trailing, args=args, kwargs=kwargs)
+                timer.daemon = True
+                timer.start()
 
         return wrapper  # type: ignore[return-value]
 

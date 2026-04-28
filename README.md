@@ -32,6 +32,22 @@ on_resize(1024, 768)  # cancels the previous call
 # Only the last call executes after 0.5s
 ```
 
+### Bounded debounce
+
+Use `max_wait` to guarantee the function fires at most `max_wait` seconds after the *first* pending call, even if calls keep arriving and continuously reset the debounce timer. Mirrors lodash `debounce({ maxWait })` semantics.
+
+```python
+@debounce(0.5, max_wait=2.0)
+def autosave(content):
+    print(f"Saving: {content[:20]}...")
+
+# Even with continuous edits, autosave fires at least every 2s.
+for chunk in stream_keystrokes():
+    autosave(chunk)
+```
+
+`max_wait` must be positive and `>= seconds`; otherwise `ValueError` is raised.
+
 ### Throttle
 
 Limit a function to a fixed number of calls within a time window. Excess calls are silently dropped.
@@ -47,10 +63,13 @@ for i in range(10):
 
 ## API
 
-| Decorator | Description |
-|-----------|-------------|
-| `debounce(seconds)` | Delays execution until `seconds` have elapsed since the last call. Cancels any pending invocation on each new call. |
-| `throttle(calls, per)` | Limits the function to `calls` invocations per `per` seconds. Uses a sliding window. |
+| Decorator | Parameter | Description |
+|-----------|-----------|-------------|
+| `debounce(seconds, *, leading=False, max_wait=None)` | `seconds` | Minimum quiet period (in seconds) before the function is invoked. Each new call cancels the previous pending invocation and restarts the timer. |
+| | `leading` | If `True`, fire on the leading edge of the window instead of the trailing edge. Subsequent rapid calls are suppressed until `seconds` of silence have elapsed. |
+| | `max_wait` | Optional upper bound (in seconds) on how long the function may be deferred from the first pending call. Must be positive and `>= seconds`. Mirrors lodash `debounce({ maxWait })`. |
+| `throttle(calls, per)` | `calls` | Maximum number of allowed invocations within the sliding window. |
+| | `per` | Length of the sliding window in seconds. Calls beyond `calls` within `per` are silently dropped. |
 
 ## Development
 
