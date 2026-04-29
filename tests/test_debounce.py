@@ -198,3 +198,72 @@ class TestMaxWait:
         """max_wait < seconds is meaningless and must raise ValueError."""
         with pytest.raises(ValueError):
             debounce(0.5, max_wait=0.2)
+
+
+class TestCancelAndFlush:
+    """Tests for the ``cancel()`` and ``flush()`` control methods."""
+
+    def test_cancel_drops_pending_call(self) -> None:
+        results: list[int] = []
+
+        @debounce(0.2)
+        def append(value: int) -> None:
+            results.append(value)
+
+        append(1)
+        append.cancel()  # type: ignore[attr-defined]
+        time.sleep(0.4)
+
+        assert results == []
+
+    def test_cancel_then_call_fires_normally(self) -> None:
+        results: list[int] = []
+        event = threading.Event()
+
+        @debounce(0.1)
+        def append(value: int) -> None:
+            results.append(value)
+            event.set()
+
+        append(1)
+        append.cancel()  # type: ignore[attr-defined]
+        append(2)
+        event.wait(timeout=0.5)
+        assert results == [2]
+
+    def test_flush_fires_pending_immediately(self) -> None:
+        results: list[int] = []
+
+        @debounce(1.0)
+        def append(value: int) -> None:
+            results.append(value)
+
+        append(7)
+        assert results == []
+        append.flush()  # type: ignore[attr-defined]
+        assert results == [7]
+
+    def test_flush_when_nothing_pending_is_noop(self) -> None:
+        results: list[int] = []
+
+        @debounce(0.1)
+        def append(value: int) -> None:
+            results.append(value)
+
+        append.flush()  # type: ignore[attr-defined]
+        assert results == []
+
+    def test_cancel_resets_leading_state(self) -> None:
+        results: list[int] = []
+
+        @debounce(0.2, leading=True)
+        def append(value: int) -> None:
+            results.append(value)
+
+        append(1)
+        append(2)  # suppressed by leading
+        assert results == [1]
+
+        append.cancel()  # type: ignore[attr-defined]
+        append(3)  # leading state reset → fires
+        assert results == [1, 3]

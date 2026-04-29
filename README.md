@@ -48,6 +48,21 @@ for chunk in stream_keystrokes():
 
 `max_wait` must be positive and `>= seconds`; otherwise `ValueError` is raised.
 
+### Cancel and flush
+
+The wrapper exposes `.cancel()` (drop any pending trailing call) and `.flush()` (fire it immediately). Mirrors the lodash debounce control API.
+
+```python
+@debounce(0.5)
+def save(content):
+    print(f"saving {content}")
+
+save("draft 1")
+save.cancel()       # drop the pending call
+save("draft 2")
+save.flush()        # fire immediately, don't wait for the timer
+```
+
 ### Throttle
 
 Limit a function to a fixed number of calls within a time window. Excess calls are silently dropped.
@@ -68,6 +83,8 @@ for i in range(10):
 | `debounce(seconds, *, leading=False, max_wait=None)` | `seconds` | Minimum quiet period (in seconds) before the function is invoked. Each new call cancels the previous pending invocation and restarts the timer. |
 | | `leading` | If `True`, fire on the leading edge of the window instead of the trailing edge. Subsequent rapid calls are suppressed until `seconds` of silence have elapsed. |
 | | `max_wait` | Optional upper bound (in seconds) on how long the function may be deferred from the first pending call. Must be positive and `>= seconds`. Mirrors lodash `debounce({ maxWait })`. |
+| `wrapper.cancel()` | — | Discard any pending trailing invocation and reset leading-edge state. |
+| `wrapper.flush()` | — | Fire the pending trailing invocation immediately (no-op if none is pending). |
 | `throttle(calls, per)` | `calls` | Maximum number of allowed invocations within the sliding window. |
 | | `per` | Length of the sliding window in seconds. Calls beyond `calls` within `per` are silently dropped. |
 

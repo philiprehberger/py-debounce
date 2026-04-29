@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0 (2026-04-28)
+
+- Add `.cancel()` and `.flush()` methods on the debounced wrapper — cancel discards a pending trailing call and resets leading-edge state; flush fires the pending call immediately
+
 ## 0.3.0 (2026-04-27)
 
 - Add `max_wait` parameter to `debounce` decorator — guarantees the wrapped function fires at most `max_wait` seconds after the first pending call, even under continuous reset chains

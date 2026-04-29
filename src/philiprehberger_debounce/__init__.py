@@ -34,6 +34,13 @@ def debounce(
     keep arriving and continuously reset the debounce timer.  Mirrors lodash
     ``debounce({ maxWait })`` semantics.
 
+    The returned wrapper exposes two control methods:
+
+    - ``wrapper.cancel()`` — discard any pending trailing invocation and reset
+      leading-edge state so the next call fires immediately.
+    - ``wrapper.flush()`` — fire the pending trailing invocation immediately
+      (no-op if nothing is pending).
+
     Args:
         seconds: Minimum quiet period before the function is invoked.
         leading: If ``True``, invoke on the leading edge instead of the
@@ -60,6 +67,7 @@ def debounce(
         lock = threading.Lock()
         may_call = True
         first_call_at: float | None = None
+        pending: tuple[tuple[Any, ...], dict[str, Any]] | None = None
 
         def _reset_may_call() -> None:
             nonlocal may_call
@@ -67,14 +75,15 @@ def debounce(
                 may_call = True
 
         def _fire_trailing(*args: Any, **kwargs: Any) -> None:
-            nonlocal first_call_at
+            nonlocal first_call_at, pending
             with lock:
                 first_call_at = None
+                pending = None
             fn(*args, **kwargs)
 
         @wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> None:
-            nonlocal timer, may_call, first_call_at
+            nonlocal timer, may_call, first_call_at, pending
             with lock:
                 if timer is not None:
                     timer.cancel()
@@ -88,6 +97,8 @@ def debounce(
                     if should_call:
                         fn(*args, **kwargs)
                     return
+
+                pending = (args, kwargs)
 
                 if max_wait is None:
                     timer = threading.Timer(seconds, _fire_trailing, args=args, kwargs=kwargs)
@@ -104,6 +115,7 @@ def debounce(
                 if elapsed >= max_wait:
                     # Upper bound already reached — fire immediately.
                     first_call_at = None
+                    pending = None
                     fn(*args, **kwargs)
                     return
 
@@ -113,6 +125,33 @@ def debounce(
                 timer.daemon = True
                 timer.start()
 
+        def cancel() -> None:
+            """Discard any pending trailing call and reset leading-edge state."""
+            nonlocal timer, may_call, first_call_at, pending
+            with lock:
+                if timer is not None:
+                    timer.cancel()
+                    timer = None
+                pending = None
+                first_call_at = None
+                may_call = True
+
+        def flush() -> None:
+            """Fire the pending trailing invocation immediately, if any."""
+            nonlocal timer, first_call_at, pending
+            with lock:
+                if pending is None:
+                    return
+                if timer is not None:
+                    timer.cancel()
+                    timer = None
+                args, kwargs = pending
+                pending = None
+                first_call_at = None
+            fn(*args, **kwargs)
+
+        wrapper.cancel = cancel  # type: ignore[attr-defined]
+        wrapper.flush = flush  # type: ignore[attr-defined]
         return wrapper  # type: ignore[return-value]
 
     return decorator
