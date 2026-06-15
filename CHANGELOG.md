@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 (2026-06-15)
+
+- Add `.is_pending()` method on the debounced wrapper — returns `True` while a trailing call is queued; useful for UI integration ("Saving…" indicators)
+- Add package-card image to README
+
 ## 0.4.0 (2026-04-28)
 
 - Add `.cancel()` and `.flush()` methods on the debounced wrapper — cancel discards a pending trailing call and resets leading-edge state; flush fires the pending call immediately

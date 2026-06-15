@@ -4,6 +4,8 @@
 [![PyPI version](https://img.shields.io/pypi/v/philiprehberger-debounce.svg)](https://pypi.org/project/philiprehberger-debounce/)
 [![Last updated](https://img.shields.io/github/last-commit/philiprehberger/py-debounce)](https://github.com/philiprehberger/py-debounce/commits/main)
 
+![philiprehberger-debounce](https://raw.githubusercontent.com/philiprehberger/py-debounce/main/package-card.webp)
+
 Debounce and throttle decorators for Python functions.
 
 ## Installation
@@ -63,6 +65,20 @@ save("draft 2")
 save.flush()        # fire immediately, don't wait for the timer
 ```
 
+### Pending check
+
+`.is_pending()` returns whether a trailing call is queued — useful for showing "Saving…" indicators or guarding code paths that depend on whether the debounced action will still fire.
+
+```python
+@debounce(0.5)
+def save(content):
+    ...
+
+save("draft 1")
+if save.is_pending():
+    show("Saving…")
+```
+
 ### Throttle
 
 Limit a function to a fixed number of calls within a time window. Excess calls are silently dropped.
@@ -85,6 +101,7 @@ for i in range(10):
 | | `max_wait` | Optional upper bound (in seconds) on how long the function may be deferred from the first pending call. Must be positive and `>= seconds`. Mirrors lodash `debounce({ maxWait })`. |
 | `wrapper.cancel()` | — | Discard any pending trailing invocation and reset leading-edge state. |
 | `wrapper.flush()` | — | Fire the pending trailing invocation immediately (no-op if none is pending). |
+| `wrapper.is_pending()` | — | Return `True` if a trailing call is queued and not yet fired. |
 | `throttle(calls, per)` | `calls` | Maximum number of allowed invocations within the sliding window. |
 | | `per` | Length of the sliding window in seconds. Calls beyond `calls` within `per` are silently dropped. |
 

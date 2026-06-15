@@ -150,8 +150,14 @@ def debounce(
                 first_call_at = None
             fn(*args, **kwargs)
 
+        def is_pending() -> bool:
+            """Return whether a trailing call is queued and not yet fired."""
+            with lock:
+                return pending is not None
+
         wrapper.cancel = cancel  # type: ignore[attr-defined]
         wrapper.flush = flush  # type: ignore[attr-defined]
+        wrapper.is_pending = is_pending  # type: ignore[attr-defined]
         return wrapper  # type: ignore[return-value]
 
     return decorator

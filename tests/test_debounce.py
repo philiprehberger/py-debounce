@@ -267,3 +267,43 @@ class TestCancelAndFlush:
         append.cancel()  # type: ignore[attr-defined]
         append(3)  # leading state reset → fires
         assert results == [1, 3]
+
+
+class TestIsPending:
+    def test_false_on_fresh_wrapper(self) -> None:
+        @debounce(0.1)
+        def fn(*args: object) -> None: ...
+
+        assert fn.is_pending() is False  # type: ignore[attr-defined]
+
+    def test_true_after_call_within_window(self) -> None:
+        @debounce(0.1)
+        def fn(*args: object) -> None: ...
+
+        fn("a")
+        assert fn.is_pending() is True  # type: ignore[attr-defined]
+        fn.cancel()  # type: ignore[attr-defined]
+
+    def test_false_after_cancel(self) -> None:
+        @debounce(0.1)
+        def fn(*args: object) -> None: ...
+
+        fn("a")
+        fn.cancel()  # type: ignore[attr-defined]
+        assert fn.is_pending() is False  # type: ignore[attr-defined]
+
+    def test_false_after_flush(self) -> None:
+        @debounce(0.1)
+        def fn(*args: object) -> None: ...
+
+        fn("a")
+        fn.flush()  # type: ignore[attr-defined]
+        assert fn.is_pending() is False  # type: ignore[attr-defined]
+
+    def test_false_after_natural_fire(self) -> None:
+        @debounce(0.05)
+        def fn(*args: object) -> None: ...
+
+        fn("a")
+        time.sleep(0.1)
+        assert fn.is_pending() is False  # type: ignore[attr-defined]
