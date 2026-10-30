@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 (2026-10-30)
+
+- Add `async def` support to `debounce` — the trailing call is scheduled with `loop.call_later` on the running event loop and runs as an `asyncio.Task`; the wrapper is a regular function returning `None`; `leading`, `max_wait`, `.cancel()`, `.flush()`, and `.is_pending()` keep working, and `.flush()` returns the started task
+- Add `async def` support to `throttle` — the wrapper stays a coroutine function; allowed calls resolve to the result, dropped calls resolve to `None`
+- Add `.reset()` and `.remaining()` methods on the throttle wrapper (thread-safe)
+- Type `debounce` with `ParamSpec` so the wrapper is typed as returning `None`, matching runtime behavior
+- Convert the README API table to the `Function / Class | Description` format, one row per function or method
+- Add README usage sections for async functions and throttle helpers
+
 ## 0.5.0 (2026-06-15)
 
 - Add `.is_pending()` method on the debounced wrapper — returns `True` while a trailing call is queued; useful for UI integration ("Saving…" indicators)

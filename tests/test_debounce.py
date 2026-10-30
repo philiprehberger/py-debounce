@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import threading
 import time
 
@@ -307,3 +309,241 @@ class TestIsPending:
         fn("a")
         time.sleep(0.1)
         assert fn.is_pending() is False  # type: ignore[attr-defined]
+
+
+class TestAsyncDebounce:
+    """Tests for debouncing ``async def`` functions."""
+
+    def test_wrapper_returns_none_and_fires_once(self) -> None:
+        results: list[int] = []
+
+        @debounce(0.02)
+        async def append(value: int) -> None:
+            results.append(value)
+
+        async def main() -> None:
+            assert append(1) is None
+            append(2)
+            append(3)
+            assert results == []
+            await asyncio.sleep(0.1)
+
+        asyncio.run(main())
+        assert results == [3]
+
+    def test_is_pending_and_cancel(self) -> None:
+        results: list[int] = []
+
+        @debounce(0.02)
+        async def append(value: int) -> None:
+            results.append(value)
+
+        async def main() -> None:
+            assert append.is_pending() is False  # type: ignore[attr-defined]
+            append(1)
+            assert append.is_pending() is True  # type: ignore[attr-defined]
+            append.cancel()  # type: ignore[attr-defined]
+            assert append.is_pending() is False  # type: ignore[attr-defined]
+            await asyncio.sleep(0.08)
+
+        asyncio.run(main())
+        assert results == []
+
+    def test_is_pending_false_after_natural_fire(self) -> None:
+        @debounce(0.01)
+        async def fn() -> None: ...
+
+        async def main() -> None:
+            fn()
+            await asyncio.sleep(0.06)
+            assert fn.is_pending() is False  # type: ignore[attr-defined]
+
+        asyncio.run(main())
+
+    def test_flush_returns_awaitable_task(self) -> None:
+        results: list[int] = []
+
+        @debounce(10.0)
+        async def append(value: int) -> int:
+            results.append(value)
+            return value * 2
+
+        async def main() -> None:
+            append(4)
+            task = append.flush()  # type: ignore[attr-defined]
+            assert task is not None
+            assert await task == 8
+            assert append.flush() is None  # type: ignore[attr-defined]
+
+        asyncio.run(main())
+        assert results == [4]
+
+    def test_leading_fires_immediately_and_suppresses(self) -> None:
+        results: list[int] = []
+
+        @debounce(0.05, leading=True)
+        async def append(value: int) -> None:
+            results.append(value)
+
+        async def main() -> None:
+            append(1)
+            append(2)
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            assert results == [1]
+            append.cancel()  # type: ignore[attr-defined]
+            append(3)
+            await asyncio.sleep(0.01)
+
+        asyncio.run(main())
+        assert results == [1, 3]
+
+    def test_leading_allows_again_after_quiet_period(self) -> None:
+        results: list[int] = []
+
+        @debounce(0.02, leading=True)
+        async def append(value: int) -> None:
+            results.append(value)
+
+        async def main() -> None:
+            append(1)
+            await asyncio.sleep(0.08)
+            append(2)
+            await asyncio.sleep(0.01)
+
+        asyncio.run(main())
+        assert results == [1, 2]
+
+    def test_max_wait_bounds_reset_chain(self) -> None:
+        results: list[int] = []
+
+        @debounce(0.05, max_wait=0.1)
+        async def append(value: int) -> None:
+            results.append(value)
+
+        async def main() -> None:
+            # Reset every 10ms for ~0.3s; without max_wait nothing would fire.
+            for i in range(30):
+                append(i)
+                await asyncio.sleep(0.01)
+            await asyncio.sleep(0.15)
+
+        asyncio.run(main())
+        assert len(results) >= 2
+        assert results == sorted(results)
+
+    def test_requires_running_loop(self) -> None:
+        @debounce(0.01)
+        async def fn() -> None: ...
+
+        with pytest.raises(RuntimeError):
+            fn()
+
+    def test_sync_function_unaffected(self) -> None:
+        @debounce(0.01)
+        def fn() -> None: ...
+
+        assert not inspect.iscoroutinefunction(fn)
+        assert fn.flush() is None  # type: ignore[attr-defined]
+
+
+class TestAsyncThrottle:
+    """Tests for throttling ``async def`` functions."""
+
+    def test_allowed_calls_return_result_dropped_return_none(self) -> None:
+        @throttle(calls=2, per=10.0)
+        async def double(value: int) -> int:
+            return value * 2
+
+        async def main() -> list[int | None]:
+            return [await double(1), await double(2), await double(3)]
+
+        assert inspect.iscoroutinefunction(double)
+        assert asyncio.run(main()) == [2, 4, None]
+
+    def test_dropped_call_does_not_run(self) -> None:
+        results: list[int] = []
+
+        @throttle(calls=1, per=10.0)
+        async def append(value: int) -> None:
+            results.append(value)
+
+        async def main() -> None:
+            await append(1)
+            await append(2)
+
+        asyncio.run(main())
+        assert results == [1]
+
+    def test_reset_and_remaining(self) -> None:
+        @throttle(calls=2, per=10.0)
+        async def fn() -> str:
+            return "ok"
+
+        async def main() -> None:
+            assert fn.remaining() == 2  # type: ignore[attr-defined]
+            await fn()
+            assert fn.remaining() == 1  # type: ignore[attr-defined]
+            await fn()
+            assert await fn() is None
+            fn.reset()  # type: ignore[attr-defined]
+            assert fn.remaining() == 2  # type: ignore[attr-defined]
+            assert await fn() == "ok"
+
+        asyncio.run(main())
+
+
+class TestThrottleHelpers:
+    """Tests for ``reset()`` and ``remaining()`` on sync throttle wrappers."""
+
+    def test_remaining_counts_down(self) -> None:
+        @throttle(calls=3, per=10.0)
+        def fn() -> None: ...
+
+        assert fn.remaining() == 3  # type: ignore[attr-defined]
+        fn()
+        fn()
+        assert fn.remaining() == 1  # type: ignore[attr-defined]
+        fn()
+        fn()  # dropped
+        assert fn.remaining() == 0  # type: ignore[attr-defined]
+
+    def test_remaining_recovers_after_window(self) -> None:
+        @throttle(calls=1, per=0.05)
+        def fn() -> None: ...
+
+        fn()
+        assert fn.remaining() == 0  # type: ignore[attr-defined]
+        time.sleep(0.1)
+        assert fn.remaining() == 1  # type: ignore[attr-defined]
+
+    def test_reset_restores_quota(self) -> None:
+        results: list[int] = []
+
+        @throttle(calls=1, per=10.0)
+        def append(value: int) -> None:
+            results.append(value)
+
+        append(1)
+        append(2)  # dropped
+        append.reset()  # type: ignore[attr-defined]
+        append(3)
+        assert results == [1, 3]
+
+    def test_concurrent_calls_are_counted(self) -> None:
+        @throttle(calls=1000, per=10.0)
+        def fn() -> None: ...
+
+        def worker() -> None:
+            for _ in range(100):
+                fn()
+                fn.remaining()  # type: ignore[attr-defined]
+
+        threads = [threading.Thread(target=worker) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert fn.remaining() == 500  # type: ignore[attr-defined]
+        fn.reset()  # type: ignore[attr-defined]
+        assert fn.remaining() == 1000  # type: ignore[attr-defined]

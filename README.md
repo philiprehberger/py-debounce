@@ -92,18 +92,71 @@ for i in range(10):
     send_request(i)  # only the first 3 calls within 1s execute
 ```
 
+### Throttle helpers
+
+The throttle wrapper exposes `.remaining()` (calls still allowed in the current window) and `.reset()` (clear the window so the full quota is available again). Both are thread-safe.
+
+```python
+@throttle(calls=5, per=60.0)
+def call_api(payload):
+    ...
+
+call_api({"id": 1})
+print(call_api.remaining())  # 4
+call_api.reset()             # e.g. after the upstream quota is refreshed
+print(call_api.remaining())  # 5
+```
+
+### Async functions
+
+Both decorators accept `async def` functions.
+
+A debounced coroutine function is wrapped in a regular (non-async) function that returns `None` — do not `await` it. Call it from inside a running event loop; the trailing call is scheduled with `loop.call_later` and runs as an `asyncio.Task` on that loop. `leading`, `max_wait`, `.cancel()`, and `.is_pending()` work as they do for sync functions, and `.flush()` returns the started `asyncio.Task` (or `None` if nothing was pending) so you can await it.
+
+```python
+import asyncio
+
+@debounce(0.3)
+async def search(query):
+    return await fetch_results(query)
+
+async def main():
+    search("p")
+    search("py")
+    search("pyt")          # only this call runs, 0.3s later
+    task = search.flush()  # or start it right away
+    if task is not None:
+        results = await task
+
+asyncio.run(main())
+```
+
+A throttled coroutine function stays a coroutine function: awaiting an allowed call returns the result, and awaiting a dropped call returns `None` without running the function.
+
+```python
+@throttle(calls=2, per=1.0)
+async def ping(host):
+    return await probe(host)
+
+async def main():
+    print(await ping("a"))  # result
+    print(await ping("b"))  # result
+    print(await ping("c"))  # None — dropped
+
+asyncio.run(main())
+```
+
 ## API
 
-| Decorator | Parameter | Description |
-|-----------|-----------|-------------|
-| `debounce(seconds, *, leading=False, max_wait=None)` | `seconds` | Minimum quiet period (in seconds) before the function is invoked. Each new call cancels the previous pending invocation and restarts the timer. |
-| | `leading` | If `True`, fire on the leading edge of the window instead of the trailing edge. Subsequent rapid calls are suppressed until `seconds` of silence have elapsed. |
-| | `max_wait` | Optional upper bound (in seconds) on how long the function may be deferred from the first pending call. Must be positive and `>= seconds`. Mirrors lodash `debounce({ maxWait })`. |
-| `wrapper.cancel()` | — | Discard any pending trailing invocation and reset leading-edge state. |
-| `wrapper.flush()` | — | Fire the pending trailing invocation immediately (no-op if none is pending). |
-| `wrapper.is_pending()` | — | Return `True` if a trailing call is queued and not yet fired. |
-| `throttle(calls, per)` | `calls` | Maximum number of allowed invocations within the sliding window. |
-| | `per` | Length of the sliding window in seconds. Calls beyond `calls` within `per` are silently dropped. |
+| Function / Class | Description |
+|------------------|-------------|
+| `debounce(seconds, *, leading=False, max_wait=None)` | Decorator that delays a call until `seconds` of quiet have passed; each new call restarts the timer. `leading=True` fires on the leading edge and suppresses calls until `seconds` of silence. `max_wait` (positive, `>= seconds`) bounds how long a call may be deferred from the first pending call. Works on sync and `async def` functions; the wrapper returns `None` |
+| `wrapper.cancel()` | Discard any pending trailing call and reset leading-edge state |
+| `wrapper.flush()` | Fire the pending trailing call immediately (no-op if none); for coroutine functions returns the started `asyncio.Task` or `None` |
+| `wrapper.is_pending()` | Return `True` if a trailing call is queued and not yet fired |
+| `throttle(calls, per)` | Decorator that allows at most `calls` invocations per sliding window of `per` seconds; extra calls are dropped and return `None`. Works on sync and `async def` functions |
+| `wrapper.remaining()` | Return how many calls are still allowed in the current throttle window |
+| `wrapper.reset()` | Clear the throttle window so the full quota is available again |
 
 ## Development
 
